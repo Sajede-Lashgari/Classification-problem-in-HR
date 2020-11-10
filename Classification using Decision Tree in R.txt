@@ -1,0 +1,158 @@
+####### Classification with Decision Tree #######
+
+# dataset: Human Resources and employees in company
+
+# libraries
+library('rpart')
+library('tree')
+library('rpart.plot')
+
+# Load data
+hdata = read.csv(choose.files(),header = TRUE, sep = ",")
+
+# Get an overview of the data
+dim(hdata)
+names(hdata)
+head(hdata)
+summary(hdata)
+names(hdata)
+
+# Split data: trainset 80% & testset 20% 
+set.seed(2)
+ind = sample(2,nrow(hdata),replace=TRUE,prob=c(.8,.2))
+train=hdata[ind==1,]
+test=hdata[ind==2,]
+dim(train)
+
+# Grow Tree
+base_model = rpart(left ~ ., data = train, method = "class",
+                 control = rpart.control(cp = 0))
+
+# Plot Decision Tree
+rpart.plot(base_model,box.palette="RdBu",shadow.col="gray",nn=TRUE)
+plot(base_model, main="Classification Tree For left")
+text(base_model)
+
+# Examine the complexity plot
+#attributes(base_model)
+printcp(base_model) # display the results
+plotcp(base_model) # visualize cross-validation results
+summary(base_model) # detailed summary of splits
+
+# Compute the accuracy of the pruned tree
+test$pred = predict(base_model, test, type = "class")
+base_accuracy = mean(test$pred == test$left)
+
+# Grow a tree with minsplit of 100 and max depth of 8
+model_preprun = rpart(left ~ ., data = train, method = "class", 
+                    control = rpart.control(cp = 0 , maxdepth = 8, minsplit = 100))
+
+# Compute the accuracy of the pruned tree
+test$pred = predict(model_preprun, test, type = "class")
+accuracy_preprun = mean(test$pred == test$left)
+
+# Postpruning
+# Prune the base_model based on the optimal cp value
+model_pruned = prune(base_model, cp = base_model$cptable[which.min(base_model$cptable[,"xerror"]),"CP"] )
+
+# Compute the accuracy of the pruned tree
+# train a decision tree
+# prediction
+test$pred = predict(model_pruned, test, type = "class")
+accuracy_postprun = mean(test$pred == test$left)
+data.frame(base_accuracy, accuracy_preprun, accuracy_postprun)
+
+rpart.plot(model_preprun)
+rpart.plot(model_pruned)
+
+#confusion matrix
+rtab = table(test$pred,test$left)
+#accuracy
+acc = sum(diag(rtab))/sum(rtab)
+#precision
+pre = sum(rtab[2,2])/sum(rtab[2,])
+#recall
+rec = sum(rtab[2,2])/sum(rtab[,2])
+
+# ROC
+library('ROCR')
+p = as.numeric(test$pred)
+RO = list(prediction=p,left=test$left)
+pred <- prediction( RO$prediction, RO$left)
+perf <- performance(pred,"tpr","fpr")
+plot(perf)
+
+## calculate AUC
+auc = performance(pred, "auc")
+auc = unlist(auc@y.values)
+
+
+
+###################################################################################################################################################
+####### The other example
+########################################################## Modelling classificaition Tree ##########################################################
+#dataset = Carseats #A simulated dataset containing sales of child car seats at 400 different stores.
+
+# libraries
+library('ISLR')
+library('tree')
+library('rpart')
+library('rpart.plot')
+
+attach(Carseats)
+head(Carseats)
+dim(Carseats)
+
+summary(Carseats)
+attributes(Carseats)
+names(Carseats)
+
+#trainset 80% & testset 20% 
+set.seed(3)
+ind = sample(2,nrow(cu.summary),replace=TRUE,prob=c(.8,.2))
+train = Carseats[ind==1,]
+test = Carseats[ind==2,]
+
+high = ifelse(Sales<=8,"No","Yes")
+Carseats = data.frame(Carseats,high)
+High.test = test$high
+
+#grow Tree
+fit=rpart(high ~ Income+Urban+US+ShelveLoc+CompPrice+Price+Age+Advertising+Education+Population,data=train,method="class",parms=list(split=c("information","gini")),control = rpart.control(cp = 0))
+attributes(fit)
+printcp(fit) # display the results
+plotcp(fit) # visualize cross-validation results
+summary(fit) # detailed summary of splits
+
+rpart.plot(fit,box.palette="RdBu",shadow.col="gray",nn=TRUE)
+plot(fit)
+text(fit)
+
+#post.pruning Tree
+pfit = prune(fit, cp=fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
+# plot the pruned tree 
+plot(pfit, uniform=TRUE, 
+   main= "Pruned Classification Tree for Sales")
+text(pfit, use.n=TRUE, all=TRUE)
+printcp(pfit) # display the results
+plotcp(pfit)
+
+# train a decision tree
+# prediction
+tree.pred = predict(pfit,test,type="class")
+ttree.pred = predict(fit,test,type="class")
+Sales_pred = predict(pfit, newdata=test,type = "class")
+
+#confusion matrix
+rtab = table(tree.pred,High.test)
+
+#accuracy
+acc = sum(diag(rtab))/sum(rtab)
+#precision
+pre = sum(rtab[2,2])/sum(rtab[2,])
+#recall
+rec = sum(rtab[2,2])/sum(rtab[,2])
+
+base_accuracy = mean(tree.pred == High.test)
+accuracy_prun = mean(ttree.pred == High.test)
+data.frame(base_accuracy, accuracy_prun)
